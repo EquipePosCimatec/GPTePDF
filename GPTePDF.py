@@ -31,7 +31,7 @@ llm = ChatOpenAI(temperature=0,max_tokens=1000, model_name="gpt-3.5-turbo",strea
 with st.sidebar:
     uploaded_files = st.file_uploader("Por favor, carregue seu(s) arquivo(s)", accept_multiple_files=True, type=None)
 #    st.info(load_version_history(), icon="🤖")
-    st.info("Após iniciado o chat, caso queira adicionar mais arquivos, será necessário reiniciar o aplicativo, atualizando o navegador", icon="🚨")
+    st.info("Após iniciado o chat, caso queira adicionar mais arquivos, será necessário reiniciar o aplicativo, atualizando o navegador.", icon="🚨")
 # Check if files are uploaded
 if uploaded_files:
     # Print the number of files to console
