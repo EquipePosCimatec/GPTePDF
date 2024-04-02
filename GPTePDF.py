@@ -111,4 +111,4 @@ if uploaded_files:
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 else:
-    st.write("Please upload your files.")
+    st.write("Por favor, carregue seus arquivos.")
