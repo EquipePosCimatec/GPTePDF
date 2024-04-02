@@ -8,14 +8,14 @@ from langchain.document_loaders import UnstructuredFileLoader
 import os
 
 # Chat UI title
-st.header("Upload your own files and ask questions like ChatGPT")
-st.subheader('File type supported: PDF/DOCX/TXT :city_sunrise:')
+st.header("Carregue seu(s) arquivo(s) e faça pergunta(s) sobre o(s) mesmo(s)")
+st.subheader('Tipos de arquivos suportados: PDF/DOCX/TXT')
 
 # File uploader in the sidebar on the left
 with st.sidebar:
     openai_api_key = st.text_input("OpenAI API Key", type="password")
 if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.")
+    st.info("Por favor, adicione sua chave da OpenAI API para continuar.")
     st.stop()
 
 # Set OPENAI_API_KEY as an environment variable
@@ -24,13 +24,13 @@ os.environ["OPENAI_API_KEY"] = openai_api_key
 llm = ChatOpenAI(temperature=0,max_tokens=1000, model_name="gpt-3.5-turbo",streaming=True)
 
 # Load version history from the text file
-def load_version_history():
-    with open("version_history.txt", "r") as file:
-        return file.read()
+#def load_version_history():
+#    with open("version_history.txt", "r") as file:
+#        return file.read()
         
 with st.sidebar:
-    uploaded_files = st.file_uploader("Please upload your files", accept_multiple_files=True, type=None)
-    st.info(load_version_history(), icon="🤖")
+    uploaded_files = st.file_uploader("Por favor, carregue seu(s) arquivo(s)", accept_multiple_files=True, type=None)
+#    st.info(load_version_history(), icon="🤖")
     st.info("Please refresh the browser if you decided to upload more files to reset the session", icon="🚨")
 # Check if files are uploaded
 if uploaded_files:
