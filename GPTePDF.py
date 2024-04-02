@@ -13,7 +13,7 @@ st.subheader('Tipos de arquivos suportados: PDF/DOCX/TXT')
 
 # File uploader in the sidebar on the left
 with st.sidebar:
-    openai_api_key = st.text_input("OpenAI API Key", type="password")
+    openai_api_key = st.text_input("Chave da OpenAI API", type="password")
 if not openai_api_key:
     st.info("Por favor, adicione sua chave da OpenAI API para continuar.")
     st.stop()
