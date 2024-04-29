@@ -1,114 +1,133 @@
 import streamlit as st
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains import ConversationalRetrievalChain
-from langchain.chat_models import ChatOpenAI
-from langchain.document_loaders import UnstructuredFileLoader
 import os
+import pytube
+import openai
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chat_models import RagGeneratorChatModel
+from langchain.docstore.document import Document
+from langchain.vectorstores import Chroma
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.document_loaders import UnstructuredFileLoader, ImageCaptionLoader
 
-# Chat UI title
-st.header("Carregue seu(s) arquivo(s) e faça pergunta(s) sobre o(s) mesmo(s)")
-st.subheader('Tipos de arquivos suportados: PDF/DOCX/TXT')
+# Configurações da interface do usuário
+st.header("Upload your own file and ask questions like ChatGPT")
+st.subheader('File types supported: PDF/DOCX/TXT/JPG/PNG/YouTube :city_sunrise:')
 
-# File uploader in the sidebar on the left
+# Barra lateral para entrada de chave de API do OpenAI
 with st.sidebar:
-    openai_api_key = st.text_input("Insira sua Chave da OpenAI API", type="password")
-if not openai_api_key:
-    st.info("Por favor, adicione sua chave da OpenAI API para continuar.")
-    st.stop()
+    openai_api_key = st.text_input("OpenAI API Key", type="password")
+    if not openai_api_key:
+        st.info("Please add your OpenAI API key to continue.")
+        st.stop()
+    os.environ["OPENAI_API_KEY"] = openai_api_key
 
-# Set OPENAI_API_KEY as an environment variable
-os.environ["OPENAI_API_KEY"] = openai_api_key
+# Carregamento do modelo LLM (GPT-3.5)
+llm = RagGeneratorChatModel(
+    model_name="gpt-3.5-turbo-16k",
+    max_tokens=16000,
+    temperature=0,
+    streaming=True
+)
 
-llm = ChatOpenAI(temperature=0,max_tokens=1000, model_name="gpt-3.5-turbo",streaming=True)
+# Carregar modelo RAG pré-treinado
+rag_model = RagGeneratorChatModel.from_pretrained("facebook/rag-token-base")
 
-# Load version history from the text file
-#def load_version_history():
-#    with open("version_history.txt", "r") as file:
-#        return file.read()
-        
+# Função para carregar histórico de versões
+def load_version_history():
+    with open("version_history.txt", "r") as file:
+        return file.read()
+
+# Barra lateral para upload de arquivos e fornecimento de URL do YouTube
 with st.sidebar:
-    uploaded_files = st.file_uploader("Por favor, carregue seu(s) arquivo(s)", accept_multiple_files=True, type=None)
-#    st.info(load_version_history(), icon="🤖")
-    st.info("Após iniciado o chat, caso queira adicionar mais arquivos, será necessário reiniciar o aplicativo, atualizando o navegador.", icon="🚨")
-# Check if files are uploaded
-if uploaded_files:
-    # Print the number of files to console
-    print(f"Number of files uploaded: {len(uploaded_files)}")
+    uploaded_files = st.file_uploader("Please upload your files", accept_multiple_files=True, type=None)
+    youtube_url = st.text_input("YouTube URL")
 
-    # Load the data and perform preprocessing only if it hasn't been loaded before
+    with st.sidebar.expander("**Version History**", expanded=False):
+        st.write(load_version_history())
+
+    st.info("Please refresh the browser if you decide to upload more files to reset the session", icon="🚨")
+
+# Processamento de dados
+if uploaded_files or youtube_url:
     if "processed_data" not in st.session_state:
-        # Load the data from uploaded PDF files
         documents = []
-        for uploaded_file in uploaded_files:
-            # Get the full file path of the uploaded file
-            file_path = os.path.join(os.getcwd(), uploaded_file.name)
 
-            # Save the uploaded file to disk
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
+        if uploaded_files:
+            for uploaded_file in uploaded_files:
+                file_path = os.path.join(os.getcwd(), uploaded_file.name)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getvalue())
 
-            # Use UnstructuredFileLoader to load the PDF file
-            loader = UnstructuredFileLoader(file_path)
-            loaded_documents = loader.load()
-            print(f"Number of files loaded: {len(loaded_documents)}")
+                if file_path.endswith((".png", ".jpg")):
+                    image_loader = ImageCaptionLoader(path_images=[file_path])
+                    image_documents = image_loader.load()
+                    documents.extend(image_documents)
+                elif file_path.endswith((".pdf", ".docx", ".txt")):
+                    loader = UnstructuredFileLoader(file_path)
+                    loaded_documents = loader.load()
+                    documents.extend(loaded_documents)
 
-            # Extend the main documents list with the loaded documents
-            documents.extend(loaded_documents)
+        if youtube_url:
+            youtube_video = pytube.YouTube(youtube_url)
+            streams = youtube_video.streams.filter(only_audio=True)
+            stream = streams.first()
+            stream.download(filename="youtube_audio.mp4")
+            openai.api_key = openai_api_key
+            with open("youtube_audio.mp4", "rb") as audio_file:
+                transcript = openai.Audio.transcribe("whisper-1", audio_file)
+            youtube_text = transcript['text']
+            youtube_document = Document(page_content=youtube_text, metadata={})
+            documents.append(youtube_document)
 
-        # Chunk the data, create embeddings, and save in vectorstore
-        text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
         document_chunks = text_splitter.split_documents(documents)
 
         embeddings = OpenAIEmbeddings()
         vectorstore = Chroma.from_documents(document_chunks, embeddings)
 
-        # Store the processed data in session state for reuse
         st.session_state.processed_data = {
             "document_chunks": document_chunks,
             "vectorstore": vectorstore,
         }
 
-        # Print the number of total chunks to console
-        print(f"Number of total chunks: {len(document_chunks)}")
-
     else:
-        # If the processed data is already available, retrieve it from session state
         document_chunks = st.session_state.processed_data["document_chunks"]
         vectorstore = st.session_state.processed_data["vectorstore"]
 
-    # Initialize Langchain's QA Chain with the vectorstore
-    qa = ConversationalRetrievalChain.from_llm(llm,vectorstore.as_retriever())
+    # Inicialização da cadeia de perguntas e respostas (Q&A) com RAG
+    qa = ConversationalRetrievalChain.from_chat_model(rag_model, vectorstore.as_retriever())
 
-
-    # Initialize chat history
+    # Histórico do chat
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display chat messages from history on app rerun
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Accept user input
-    if prompt := st.chat_input("Faça sua(s) pergunta(s)..."):
+    # Entrada do usuário
+    if prompt := st.chat_input("Ask your questions?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Query the assistant using the latest chat history
-        result = qa({"question": prompt, "chat_history": [(message["role"], message["content"]) for message in st.session_state.messages]})
+        history = [
+            f"{message['role']}: {message['content']}" 
+            for message in st.session_state.messages
+        ]
 
-        # Display assistant response in chat message container
+        # Consulta o modelo RAG para obter resposta
+        result = qa({
+            "question": prompt, 
+            "chat_history": history
+        })
+
+        # Exibe a resposta na interface do usuário
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_response = ""
             full_response = result["answer"]
-            message_placeholder.markdown(full_response + "|")
-        message_placeholder.markdown(full_response)    
-        print(full_response)
+            message_placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 else:
-    st.write("Por favor, carregue seus arquivos.")
+    st.write("Please upload your files and provide a YouTube URL for transcription.")
