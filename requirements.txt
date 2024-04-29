@@ -1,7 +1,7 @@
 langchain
 streamlit
-openai==0.28
-chromadb <= 0.3.29
+openai
+chromadb
 tiktoken
 pypdf
 unstructured[all-docs]
@@ -12,4 +12,4 @@ ffmpeg-python
 transformers
 pandas==1.3.3
 pyarrow
-pip==23.2.1
+pip
